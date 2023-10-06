@@ -1,12 +1,17 @@
 import hashlib
 import os
 import re
-import getopt,sys
+import getopt
+import sys
 
 ignore_file = ".ignore"
 ignore_patterns = []
+service = "nginx"
+service_shutdown = False
+integrity = True
 
-class bcolors:
+
+class TextColors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
     OKCYAN = '\033[96m'
@@ -17,18 +22,20 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+
 def load_ignore():
-    global ignore_file,ignore_patterns
-    
+    global ignore_file, ignore_patterns
+
     with open(ignore_file, "r") as f:
         ignore_patterns = [re.compile(p) for p in f.read().splitlines()]
 
-def checkServiceStatus(service):
-    try:
-        print(f"View {service} service status")
 
-        #Check all the runnung service
-        for line in os.popen(f"systemctl status {service}.service"):
+def check_service_status(service_name):
+    try:
+        print(f"View {service_name} service status")
+
+        # Check all the runnung service
+        for line in os.popen(f"systemctl status {service_name}.service"):
             services = line.split()
             print(services)
             pass
@@ -38,53 +45,54 @@ def checkServiceStatus(service):
 
     pass
 
-def startService(service):
+
+def start_service(service_name):
     try:
-        #start service
-        os.popen(f"sudo systemctl start {service}.service")
-        print(f"{service} service started successfully...")
+        # start service
+        os.popen(f"sudo systemctl start {service_name}.service")
+        print(f"{service_name} service started successfully...")
 
     except OSError as ose:
         print("Error while running the command", ose)
 
     pass
 
-def stopService(service):
+
+def stop_service(service_name):
     try:
-        #stop nginx service
-        os.popen(f"sudo systemctl stop {service}.service")
-        print(f"{service} service terminated successfully...")
+        # stop nginx service
+        os.popen(f"sudo systemctl stop {service_name}.service")
+        print(f"{service_name} service terminated successfully...")
 
     except OSError as ose:
         print("Error while running the command", ose)
 
     pass
 
-def check_result(result):
-    text = ""
 
-    if result == True:
-        text = bcolors.OKGREEN+"PASSED"+bcolors.ENDC
+def check_result(result: bool):
+
+    if result:
+        text = TextColors.OKGREEN + "PASSED" + TextColors.ENDC
     else:
-        text = bcolors.FAIL+"FAIL"+bcolors.ENDC
+        text = TextColors.FAIL + "FAIL" + TextColors.ENDC
 
     return text
 
 
-def get_pastas(pasta):
-    if not os.path.exists(pasta):
-        raise FileNotFoundError("A pasta '{}' não existe.".format(pasta))
+def get_folders(folder):
+    if not os.path.exists(folder):
+        raise FileNotFoundError(f"the folder '{folder}' net exist.")
 
     lista = []
-    for arquivo in os.listdir(pasta):
-        caminho_arquivo = os.path.join(pasta, arquivo)
-        if not os.path.isfile(caminho_arquivo):
-            lista.append(caminho_arquivo)
+    for file in os.listdir(folder):
+        file_path = os.path.join(folder, file)
+        if not os.path.isfile(file_path):
+            lista.append(file_path)
     return lista
-    
 
-def calcular_md5_pasta(pasta):
 
+def calc_md5_pasta(folder):
     global ignore_patterns
     """
     Calcula o MD5 de uma pasta, considerando no cálculo todo o conteúdo, incluindo diretórios e subdiretórios.
@@ -95,48 +103,46 @@ def calcular_md5_pasta(pasta):
     Returns:
       O MD5 da pasta.
     """
-  
-    if not os.path.exists(pasta):
-      raise FileNotFoundError("A pasta '{}' não existe.".format(pasta))
-    
-  
-    hash_md5 = hashlib.md5()
-  
-    for arquivo in os.listdir(pasta):
-      caminho_arquivo = os.path.join(pasta, arquivo)      
-      if os.path.isfile(caminho_arquivo):
-        if not any(p.search(caminho_arquivo) for p in ignore_patterns):
-            with open(caminho_arquivo, "rb") as f:                
-                hash_md5.update(f.read())
-  
-      elif os.path.isdir(caminho_arquivo):
-        if not any(p.search(caminho_arquivo) for p in ignore_patterns):            
-            hash_md5_dir = calcular_md5_pasta(caminho_arquivo)
-            hash_md5.update(hash_md5_dir.encode('UTF-8'))
 
-  
+    if not os.path.exists(folder):
+        raise FileNotFoundError("A pasta '{}' não existe.".format(folder))
+
+    hash_md5 = hashlib.md5()
+
+    for file in os.listdir(folder):
+        file_path = os.path.join(folder, file)
+        if os.path.isfile(file_path):
+            if not any(p.search(file_path) for p in ignore_patterns):
+                with open(file_path, "rb") as f:
+                    hash_md5.update(f.read())
+
+        elif os.path.isdir(file_path):
+            if not any(p.search(file_path) for p in ignore_patterns):
+                hash_md5_dir = calc_md5_pasta(file_path)
+                hash_md5.update(hash_md5_dir.encode('UTF-8'))
+
     return hash_md5.hexdigest()
 
 
-def main():    
-    global ignore_file
+def main():
+    global ignore_file, integrity, service, service_shutdown
 
     # Remove 1st argument from the
     # list of command line arguments
-    argumentList = sys.argv[1:]
+    argument_list = sys.argv[1:]
 
-    options = "cr:f:i:hmo:"
+    options = "cr:f:i:hmo:s:"
 
     # Long options
-    long_options = ["help", "output=","folder=","ignore="]
+    long_options = ["help", "output=", "folder=", "ignore=", 'service=', "shutdown"]
 
     try:
         # Parsing argument
-        arguments, values = getopt.getopt(argumentList, options, long_options)        
+        arguments, values = getopt.getopt(argument_list, options, long_options)
 
-        hash_check=None
+        hash_check = None
 
-        pasta=None;       
+        pasta = None
 
         # checking each argument
         for currentArgument, currentValue in arguments:
@@ -151,39 +157,55 @@ def main():
                 exit(0)
 
             if currentArgument in ("-r", "--reference"):
-                print(("Code hash reference: %s") % (currentValue))
+                print(f"Code hash reference: {currentValue}")
                 hash_check = currentValue
 
             if currentArgument in ("-f", "--folder"):
-                print(("verify foldes in : %s") % (currentValue))
+                print(f"verify foldes in : {currentValue}")
                 pasta = currentValue
 
-            if currentArgument in ("-i", "--ignore"):                
+            if currentArgument in ("-i", "--ignore"):
                 ignore_file = currentValue
 
-            elif currentArgument in ("-m", "--My_file"):
-                print("Displaying file_name:", sys.argv[0])
-
             elif currentArgument in ("-o", "--output"):
-                print(("Enabling special output mode (%s)") % (currentValue))
+                print(f"Enabling special output mode ({currentValue})")
 
+            elif currentArgument in ("-s", "--service"):
+                service = currentValue
+
+            elif currentArgument == "--shutdown":
+                service_shutdown = True
 
         load_ignore()
 
         if not hash_check:
-            print('hash verication is required, use command -r <HASH> to insert hash string.')
+            print('hash verification is required, use command -r <HASH> to insert hash string.')
             print('consult command help -h or --help')
             exit(1)
 
-        pastas = get_pastas(pasta)
+        pastas = get_folders(pasta)
 
         for directory in pastas:
 
             # Calcula o MD5 da pasta
-            hash_md5 = calcular_md5_pasta(directory)
+            hash_md5 = calc_md5_pasta(directory)
+
+            # Registra integridade
+            if hash_check != hash_md5:
+                integrity = False
 
             # Imprime o MD5
             print(f"{directory}\t{hash_md5}\t{check_result(hash_check == hash_md5)}")
+
+        if not integrity and service_shutdown:
+            print(f"Same code isn`t integrity the service {service} will shutdown ")
+            stop_service(service)
+            print("Integrity test fail.")
+            exit(0)
+
+        print("Integrity test pass successfully.")
+        start_service(service)
+        exit(0)
 
     except getopt.error as err:
         # output error, and return with an error code
@@ -191,4 +213,4 @@ def main():
 
 
 if __name__ == "__main__":
-  main()
+    main()
