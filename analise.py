@@ -197,15 +197,17 @@ def main():
             # Imprime o MD5
             print(f"{directory}\t{hash_md5}\t{check_result(hash_check == hash_md5)}")
 
-        if not integrity and service_shutdown:
-            print(f"Same code isn`t integrity the service {service} will shutdown ")
-            stop_service(service)
+        if not integrity:
+            if service_shutdown:
+                print(f"Same code isn`t integrity the service {service} will shutdown ")
+                stop_service(service)
             print("Integrity test fail.")
             exit(0)
-
-        print("Integrity test pass successfully.")
-        start_service(service)
-        exit(0)
+        else:
+            print("Integrity test pass successfully.")
+            if service_shutdown:
+                start_service(service)
+            exit(0)
 
     except getopt.error as err:
         # output error, and return with an error code

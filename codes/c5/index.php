@@ -1,2 +1,2 @@
 <?php
-echo 'oi ';
+echo 'oi';
