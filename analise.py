@@ -23,6 +23,43 @@ def load_ignore():
     with open(ignore_file, "r") as f:
         ignore_patterns = [re.compile(p) for p in f.read().splitlines()]
 
+def checkServiceStatus(service):
+    try:
+        print(f"View {service} service status")
+
+        #Check all the runnung service
+        for line in os.popen(f"systemctl status {service}.service"):
+            services = line.split()
+            print(services)
+            pass
+
+    except OSError as ose:
+        print("Error while running the command", ose)
+
+    pass
+
+def startService(service):
+    try:
+        #start service
+        os.popen(f"sudo systemctl start {service}.service")
+        print(f"{service} service started successfully...")
+
+    except OSError as ose:
+        print("Error while running the command", ose)
+
+    pass
+
+def stopService(service):
+    try:
+        #stop nginx service
+        os.popen(f"sudo systemctl stop {service}.service")
+        print(f"{service} service terminated successfully...")
+
+    except OSError as ose:
+        print("Error while running the command", ose)
+
+    pass
+
 def check_result(result):
     text = ""
 
@@ -104,12 +141,14 @@ def main():
         # checking each argument
         for currentArgument, currentValue in arguments:
 
-            if currentArgument in ("-h", "--Help"):
+            if currentArgument in ("-h", "--help"):
                 print("""
                       Displaying Help\n
                       -r input hash code verification
                       -f analyse a gruop of folder with same code
+                      -i input ignore pattern file
                       """)
+                exit(0)
 
             if currentArgument in ("-r", "--reference"):
                 print(("Code hash reference: %s") % (currentValue))
@@ -131,11 +170,12 @@ def main():
 
         load_ignore()
 
-        pastas = get_pastas(pasta)
-
         if not hash_check:
-            print('hash verication is required, use command -r <HASH> to insert hash string')
+            print('hash verication is required, use command -r <HASH> to insert hash string.')
+            print('consult command help -h or --help')
             exit(1)
+
+        pastas = get_pastas(pasta)
 
         for directory in pastas:
 
