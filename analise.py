@@ -9,6 +9,7 @@ ignore_patterns = []
 service = "nginx"
 service_shutdown = False
 integrity = True
+target = None
 
 
 class TextColors:
@@ -27,7 +28,9 @@ def load_ignore():
     global ignore_file, ignore_patterns
 
     with open(ignore_file, "r") as f:
-        ignore_patterns = [re.compile(p) for p in f.read().splitlines()]
+        ignore_patterns = [re.compile(p.replace('*', '.+')) for p in f.read().splitlines()]
+
+    print(ignore_patterns)
 
 
 def check_service_status(service_name):
@@ -71,7 +74,6 @@ def stop_service(service_name):
 
 
 def check_result(result: bool):
-
     if result:
         text = TextColors.OKGREEN + "PASSED" + TextColors.ENDC
     else:
@@ -84,15 +86,15 @@ def get_folders(folder):
     if not os.path.exists(folder):
         raise FileNotFoundError(f"the folder '{folder}' net exist.")
 
-    lista = []
+    folder_list = []
     for file in os.listdir(folder):
         file_path = os.path.join(folder, file)
         if not os.path.isfile(file_path):
-            lista.append(file_path)
-    return lista
+            folder_list.append(file_path)
+    return folder_list
 
 
-def calc_md5_pasta(folder):
+def calc_md5_folder(folder):
     global ignore_patterns
     """
     Calcula o MD5 de uma pasta, considerando no cálculo todo o conteúdo, incluindo diretórios e subdiretórios.
@@ -118,20 +120,20 @@ def calc_md5_pasta(folder):
 
         elif os.path.isdir(file_path):
             if not any(p.search(file_path) for p in ignore_patterns):
-                hash_md5_dir = calc_md5_pasta(file_path)
+                hash_md5_dir = calc_md5_folder(file_path)
                 hash_md5.update(hash_md5_dir.encode('UTF-8'))
 
     return hash_md5.hexdigest()
 
 
 def main():
-    global ignore_file, integrity, service, service_shutdown
+    global target, ignore_file, integrity, service, service_shutdown
 
     # Remove 1st argument from the
     # list of command line arguments
     argument_list = sys.argv[1:]
 
-    options = "cr:f:i:hmo:s:"
+    options = "a:cr:f:i:hmo:s:"
 
     # Long options
     long_options = ["help", "output=", "folder=", "ignore=", 'service=', "shutdown"]
@@ -150,11 +152,15 @@ def main():
             if currentArgument in ("-h", "--help"):
                 print("""
                       Displaying Help\n
+                      -a calc md5 from file or directory and use as reference
                       -r input hash code verification
-                      -f analyse a gruop of folder with same code
+                      -f analyse a group of folder with same code
                       -i input ignore pattern file
                       """)
                 exit(0)
+
+            if currentArgument == "-a":
+                target = currentValue
 
             if currentArgument in ("-r", "--reference"):
                 print(f"Code hash reference: {currentValue}")
@@ -178,36 +184,44 @@ def main():
 
         load_ignore()
 
+        if target:
+            print(f"Code hash reference: {target}")
+            hash_check = calc_md5_folder(target)
+            print(f"result: {hash_check}")
+
+
         if not hash_check:
             print('hash verification is required, use command -r <HASH> to insert hash string.')
             print('consult command help -h or --help')
             exit(1)
 
-        pastas = get_folders(pasta)
+        if pasta != None:
 
-        for directory in pastas:
+            pastas = get_folders(pasta)
 
-            # Calcula o MD5 da pasta
-            hash_md5 = calc_md5_pasta(directory)
+            for directory in pastas:
 
-            # Registra integridade
-            if hash_check != hash_md5:
-                integrity = False
+                # Calcula o MD5 da pasta
+                hash_md5 = calc_md5_folder(directory)
 
-            # Imprime o MD5
-            print(f"{directory}\t{hash_md5}\t{check_result(hash_check == hash_md5)}")
+                # Registra integridade
+                if hash_check != hash_md5:
+                    integrity = False
 
-        if not integrity:
-            if service_shutdown:
-                print(f"Same code isn`t integrity the service {service} will shutdown ")
-                stop_service(service)
-            print("Integrity test fail.")
-            exit(0)
-        else:
-            print("Integrity test pass successfully.")
-            if service_shutdown:
-                start_service(service)
-            exit(0)
+                # Imprime o MD5
+                print(f"{directory}\t{hash_md5}\t{check_result(hash_check == hash_md5)}")
+
+            if not integrity:
+                if service_shutdown:
+                    print(f"Same code isn`t integrity the service {service} will shutdown ")
+                    stop_service(service)
+                print("Integrity test fail.")
+                exit(0)
+            else:
+                print("Integrity test pass successfully.")
+                if service_shutdown:
+                    start_service(service)
+                exit(0)
 
     except getopt.error as err:
         # output error, and return with an error code
