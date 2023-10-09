@@ -30,8 +30,6 @@ def load_ignore():
     with open(ignore_file, "r") as f:
         ignore_patterns = [re.compile(p.replace('*', '.+')) for p in f.read().splitlines()]
 
-    print(ignore_patterns)
-
 
 def check_service_status(service_name):
     try:
@@ -189,18 +187,15 @@ def main():
             hash_check = calc_md5_folder(target)
             print(f"result: {hash_check}")
 
-
         if not hash_check:
             print('hash verification is required, use command -r <HASH> to insert hash string.')
             print('consult command help -h or --help')
             exit(1)
 
-        if pasta != None:
-
+        if pasta:
             pastas = get_folders(pasta)
 
             for directory in pastas:
-
                 # Calcula o MD5 da pasta
                 hash_md5 = calc_md5_folder(directory)
 
