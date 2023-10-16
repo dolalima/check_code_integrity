@@ -10,6 +10,7 @@ service = "nginx"
 service_shutdown = False
 integrity = True
 target = None
+default_hash_algorithm = "md5"
 
 
 class TextColors:
@@ -92,6 +93,21 @@ def get_folders(folder):
     return folder_list
 
 
+def get_hash_lib(hash_type="md5"):
+    match hash_type:
+        case "md5":
+            return hashlib.md5()
+        case "sha256":
+            return hashlib.sha256()
+        case "sha1":
+            return hashlib.sha1()
+        case _:
+            raise Exception('hash algoritm not found')
+
+
+
+
+
 def calc_md5_folder(folder):
     global ignore_patterns
     """
@@ -107,7 +123,7 @@ def calc_md5_folder(folder):
     if not os.path.exists(folder):
         raise FileNotFoundError("A pasta '{}' não existe.".format(folder))
 
-    hash_md5 = hashlib.md5()
+    hash_md5 = get_hash_lib(default_hash_algorithm)
 
     for file in os.listdir(folder):
         file_path = os.path.join(folder, file)
@@ -125,7 +141,7 @@ def calc_md5_folder(folder):
 
 
 def main():
-    global target, ignore_file, integrity, service, service_shutdown
+    global target, ignore_file, integrity, service, service_shutdown, default_hash_algorithm
 
     # Remove 1st argument from the
     # list of command line arguments
@@ -134,7 +150,7 @@ def main():
     options = "a:cr:f:i:hmo:s:"
 
     # Long options
-    long_options = ["help", "output=", "folder=", "ignore=", 'service=', "shutdown"]
+    long_options = ["help", "output=", "folder=", "ignore=", 'service=', "hash=", "shutdown"]
 
     try:
         # Parsing argument
@@ -154,6 +170,7 @@ def main():
                       -r input hash code verification
                       -f analyse a group of folder with same code
                       -i input ignore pattern file
+                      --hash= choose algorithm lib. DEFAULT=md5
                       """)
                 exit(0)
 
@@ -171,13 +188,17 @@ def main():
             if currentArgument in ("-i", "--ignore"):
                 ignore_file = currentValue
 
-            elif currentArgument in ("-o", "--output"):
+            if currentArgument == "--hash":
+                default_hash_algorithm = currentValue
+                print(f"Using {default_hash_algorithm} hash algorithm")
+
+            if currentArgument in ("-o", "--output"):
                 print(f"Enabling special output mode ({currentValue})")
 
-            elif currentArgument in ("-s", "--service"):
+            if currentArgument in ("-s", "--service"):
                 service = currentValue
 
-            elif currentArgument == "--shutdown":
+            if currentArgument == "--shutdown":
                 service_shutdown = True
 
         load_ignore()
@@ -203,17 +224,17 @@ def main():
                 if hash_check != hash_md5:
                     integrity = False
 
-                # Imprime o MD5
+                # Imprime o hash
                 print(f"{directory}\t{hash_md5}\t{check_result(hash_check == hash_md5)}")
 
             if not integrity:
                 if service_shutdown:
                     print(f"Same code isn`t integrity the service {service} will shutdown ")
                     stop_service(service)
-                print("Integrity test fail.")
+                print(TextColors.FAIL + "Integrity test fail." + TextColors.ENDC)
                 exit(0)
             else:
-                print("Integrity test pass successfully.")
+                print(TextColors.OKGREEN+"Integrity test pass successfully."+TextColors.ENDC)
                 if service_shutdown:
                     start_service(service)
                 exit(0)
