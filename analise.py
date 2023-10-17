@@ -3,6 +3,7 @@ import os
 import re
 import getopt
 import sys
+import diff
 
 ignore_file = ".ignore"
 ignore_patterns = []
@@ -34,7 +35,7 @@ def load_ignore():
 
 def check_service_status(service_name):
     try:
-        print(f"View {service_name} service status")
+        print(f"show {service_name} service status")
 
         # Check all the runnung service
         for line in os.popen(f"systemctl status {service_name}.service"):
@@ -108,7 +109,23 @@ def get_hash_lib(hash_type="md5"):
 
 
 
-def calc_md5_folder(folder):
+
+def check_file_by_file(path):
+    print('analyse side by site')
+    for file in os.listdir(path):
+        print(file)
+
+def calc_hash_file(file):
+    global ignore_patterns
+    hash_md5 = get_hash_lib(default_hash_algorithm)
+    if os.path.isfile(file):
+        if not any(p.search(file) for p in ignore_patterns):
+            with open(file, "rb") as f:
+                hash_md5.update(f.read())
+    return hash_md5.hexdigest()
+
+
+def calc_hash_folder(folder):
     global ignore_patterns
     """
     Calcula o MD5 de uma pasta, considerando no cálculo todo o conteúdo, incluindo diretórios e subdiretórios.
@@ -134,7 +151,7 @@ def calc_md5_folder(folder):
 
         elif os.path.isdir(file_path):
             if not any(p.search(file_path) for p in ignore_patterns):
-                hash_md5_dir = calc_md5_folder(file_path)
+                hash_md5_dir = calc_hash_folder(file_path)
                 hash_md5.update(hash_md5_dir.encode('UTF-8'))
 
     return hash_md5.hexdigest()
@@ -205,7 +222,7 @@ def main():
 
         if target:
             print(f"Code hash reference: {target}")
-            hash_check = calc_md5_folder(target)
+            hash_check = calc_hash_folder(target)
             print(f"result: {hash_check}")
 
         if not hash_check:
@@ -218,7 +235,7 @@ def main():
 
             for directory in pastas:
                 # Calcula o MD5 da pasta
-                hash_md5 = calc_md5_folder(directory)
+                hash_md5 = calc_hash_folder(directory)
 
                 # Registra integridade
                 if hash_check != hash_md5:
@@ -226,6 +243,13 @@ def main():
 
                 # Imprime o hash
                 print(f"{directory}\t{hash_md5}\t{check_result(hash_check == hash_md5)}")
+                if (hash_check != hash_md5) and target:
+                    for file_name, linhas_diferentes in diff.compare_files(directory, target, ignore_patterns):
+                        if any(l for l in linhas_diferentes):
+                            print("File:", file_name)
+                        for line in linhas_diferentes:
+                            print("Line:", line)
+
 
             if not integrity:
                 if service_shutdown:
