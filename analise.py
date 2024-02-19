@@ -106,8 +106,59 @@ def get_hash_lib(hash_type="md5"):
             raise Exception('hash algoritm not found')
 
 
+def get_files(path):
+    relative_file_list = []
+
+    for file in os.listdir(path):
+        file_path = os.path.join(path, file)
+        if os.path.isfile(file_path):
+            relative_file_list.append(file)
+        elif os.path.isdir(file_path):
+            for file_i in get_files(file_path):
+                relative_file_list.append(f"{file}/{file_i}")
+
+    for file in relative_file_list:
+        file_path = os.path.join(path, file)
+        calc_hash = calc_hash_file(file_path)
+        print(f"{file} - {calc_hash}")
+
+    return relative_file_list
+
+def compare_files(pasta1, pasta2, ignore_patterns = []):
+    """
+    Compara os arquivos de duas pastas, incluindo os arquivos em subpastas.
+
+    Args:
+      pasta1: Pasta 1.
+      pasta2: Pasta 2.
+
+    Returns:
+      Uma lista de tuplas, onde cada tupla contém o nome do arquivo, o número da linha e o texto da diferença.
+    """
+
+    arquivos_diferentes = []
+
+    for pasta, subpastas, arquivos in os.walk(pasta1):
+
+        for arquivo in arquivos:
+
+            path_file_1 = os.path.join(pasta, arquivo)
+            path_file_2 = os.path.join(pasta2 + (pasta[len(pasta1):]), arquivo)
+
+            if not any(p.search(path_file_1) for p in ignore_patterns):
+
+                if os.path.isfile(path_file_1) and os.path.isfile(path_file_2):
+                    hash_1 = calc_hash_file(path_file_1)
+                    hash_2 = calc_hash_file(path_file_2)
+
+                    # if hash_1 != hash_2:
+                    arquivos_diferentes.append((path_file_2, [f"{path_file_2}\t{hash_2}\t{check_result(hash_1 == hash_2)}"]))
+
+                if os.path.isfile(path_file_1) and not os.path.isfile(path_file_2):
+                    arquivos_diferentes.append((arquivo, [f'{path_file_2}\tnot fount\t\t{check_result(False)}']))
 
 
+    return arquivos_diferentes
 
 
 def check_file_by_file(path):
@@ -234,6 +285,7 @@ def main():
             pastas = get_folders(pasta)
 
             for directory in pastas:
+                print("--------START---------")
                 # Calcula o MD5 da pasta
                 hash_md5 = calc_hash_folder(directory)
 
@@ -244,12 +296,13 @@ def main():
                 # Imprime o hash
                 print(f"{directory}\t{hash_md5}\t{check_result(hash_check == hash_md5)}")
                 if (hash_check != hash_md5) and target:
-                    for file_name, linhas_diferentes in diff.compare_files(directory, target, ignore_patterns):
-                        if any(l for l in linhas_diferentes):
-                            print("File:", file_name)
+                    for file_name, linhas_diferentes in compare_files(directory, target, ignore_patterns):
+                        # if any(l for l in linhas_diferentes):
+                            # print("File:", file_name)
                         for line in linhas_diferentes:
-                            print("Line:", line)
+                            print(line)
 
+                print("---------END---------\n")
 
             if not integrity:
                 if service_shutdown:
